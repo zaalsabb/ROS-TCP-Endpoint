@@ -19,6 +19,7 @@ import socket
 import logging
 import threading
 import importlib
+import urllib2
 
 from .tcp_sender import UnityTcpSender
 from .client import ClientThread
@@ -33,7 +34,7 @@ class TcpServer:
     Initializes ROS node and TCP server.
     """
 
-    def __init__(self, node_name, buffer_size=1024, connections=2, tcp_ip="", tcp_port=-1):
+    def __init__(self, node_name, buffer_size=1024, connections=2, public=False, tcp_port=-1):
         """
         Initializes ROS node and class variables.
 
@@ -42,15 +43,9 @@ class TcpServer:
             buffer_size:             The read buffer size used when reading from a socket
             connections:             Max number of queued connections. See Python Socket documentation
         """
-        if tcp_ip != "":
-            self.tcp_ip = tcp_ip
-        else:
-            self.tcp_ip = rospy.get_param("/ROS_IP")
 
-        if tcp_port != -1:
-            self.tcp_port = tcp_port
-        else:
-            self.tcp_port = rospy.get_param("/ROS_TCP_PORT", 10000)
+        self.public = public
+        self.tcp_port = tcp_port
 
         self.unity_tcp_sender = UnityTcpSender()
 
@@ -80,13 +75,26 @@ class TcpServer:
         Creates and binds sockets using TCP variables then listens for incoming connections.
         For each new connection a client thread will be created to handle communication.
         """
-        rospy.loginfo("Starting server on {}:{}".format(self.tcp_ip, self.tcp_port))
-        tcp_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        if self.public:
+            self.tcp_ip = ''
+            try:
+                external_ip = urllib2.urlopen('https://ident.me').read().decode('utf8')
+            except:
+                external_ip = ''
+            rospy.loginfo("Starting public server on IP= {} on port={}".format(external_ip, self.tcp_port))
+            tcp_server = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+        else:
+            self.tcp_ip = get_ipv4()
+            rospy.loginfo("Starting local server on {}:{}".format(self.tcp_ip, self.tcp_port))
+            tcp_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
         tcp_server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         tcp_server.bind((self.tcp_ip, self.tcp_port))
 
         while True:
             tcp_server.listen(self.connections)
+            client_sock, client_addr = tcp_server.accept()
+            print('New connection from', client_addr)            
 
             try:
                 (conn, (ip, port)) = tcp_server.accept()
@@ -116,6 +124,16 @@ class TcpServer:
             params = json.loads(message_json)
             function(**params)
 
+def get_ipv4():
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(('10.255.255.255', 1))
+        IP = s.getsockname()[0]
+    except Exception:
+        IP = '127.0.0.1'
+    finally:
+        s.close()
+    return IP
 
 class SysCommands:
     def __init__(self, tcp_server):
