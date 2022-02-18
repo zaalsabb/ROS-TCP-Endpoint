@@ -12,11 +12,11 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-import sys
-import json
 import rospy
 import socket
 import logging
+import json
+import sys
 import threading
 import importlib
 import urllib2
@@ -47,13 +47,13 @@ class TcpServer:
         self.public = public
         self.tcp_port = tcp_port
 
-        self.unity_tcp_sender = UnityTcpSender()
+        self.unity_tcp_sender = UnityTcpSender(self)
 
         self.node_name = node_name
-        self.publishers = {}
-        self.subscribers = {}
-        self.ros_services = {}
-        self.unity_services = {}
+        self.publishers_table = {}
+        self.subscribers_table = {}
+        self.ros_services_table = {}
+        self.unity_services_table = {}
         self.buffer_size = buffer_size
         self.connections = connections
         self.syscommands = SysCommands(self)
@@ -62,9 +62,9 @@ class TcpServer:
 
     def start(self, publishers=None, subscribers=None):
         if publishers is not None:
-            self.publishers = publishers
+            self.publishers_table = publishers
         if subscribers is not None:
-            self.subscribers = subscribers
+            self.subscribers_table = subscribers
         server_thread = threading.Thread(target=self.listen_loop)
         # Exit the server thread when the main thread terminates
         server_thread.daemon = True
@@ -72,8 +72,8 @@ class TcpServer:
 
     def listen_loop(self):
         """
-        Creates and binds sockets using TCP variables then listens for incoming connections.
-        For each new connection a client thread will be created to handle communication.
+            Creates and binds sockets using TCP variables then listens for incoming connections.
+            For each new connection a client thread will be created to handle communication.
         """
         if self.public:
             self.tcp_ip = ''
@@ -100,7 +100,7 @@ class TcpServer:
                 (conn, (ip, port)) = tcp_server.accept()
                 ClientThread(conn, self, ip, port).start()
             except socket.timeout as err:
-                logging.exception("ros_tcp_endpoint.TcpServer: socket timeout")
+                self.logerr("ros_tcp_endpoint.TcpServer: socket timeout")
 
     def send_unity_error(self, error):
         self.unity_tcp_sender.send_unity_error(error)
@@ -118,11 +118,23 @@ class TcpServer:
         function = getattr(self.syscommands, topic[2:])
         if function is None:
             self.send_unity_error("Don't understand SysCommand.'{}'".format(topic))
-            return
         else:
             message_json = data.decode("utf-8")
             params = json.loads(message_json)
             function(**params)
+
+    def loginfo(self, text):
+        rospy.loginfo(text)
+
+    def logwarn(self, text):
+        rospy.logwarn(text)
+
+    def logerr(self, text):
+        rospy.logerr(text)
+
+    def unregister_node(self, old_node):
+        if old_node is not None:
+            old_node.unregister()
 
 def get_ipv4():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -148,19 +160,21 @@ class SysCommands:
             )
             return
 
-        message_class = resolve_message_name(message_name)
+        message_class = self.resolve_message_name(message_name)
         if message_class is None:
             self.tcp_server.send_unity_error(
                 "SysCommand.subscribe - Unknown message class '{}'".format(message_name)
             )
             return
 
-        rospy.loginfo("RegisterSubscriber({}, {}) OK".format(topic, message_class))
+        old_node = self.tcp_server.subscribers_table.get(topic)
+        if old_node is not None:
+            self.tcp_server.unregister_node(old_node)
 
-        if topic in self.tcp_server.subscribers:
-            self.tcp_server.subscribers[topic].unregister()
+        new_subscriber = RosSubscriber(topic, message_class, self.tcp_server)
+        self.tcp_server.subscribers_table[topic] = new_subscriber
 
-        self.tcp_server.subscribers[topic] = RosSubscriber(topic, message_class, self.tcp_server)
+        self.tcp_server.loginfo("RegisterSubscriber({}, {}) OK".format(topic, message_class))
 
     def publish(self, topic, message_name, queue_size=10, latch=False):
         if topic == "":
@@ -171,19 +185,22 @@ class SysCommands:
             )
             return
 
-        message_class = resolve_message_name(message_name)
+        message_class = self.resolve_message_name(message_name)
         if message_class is None:
             self.tcp_server.send_unity_error(
                 "SysCommand.publish - Unknown message class '{}'".format(message_name)
             )
             return
 
-        rospy.loginfo("RegisterPublisher({}, {}) OK".format(topic, message_class))
+        old_node = self.tcp_server.publishers_table.get(topic)
+        if old_node is not None:
+            self.tcp_server.unregister_node(old_node)
 
-        if topic in self.tcp_server.publishers:
-            self.tcp_server.publishers[topic].unregister()
+        new_publisher = RosPublisher(topic, message_class, queue_size=queue_size, latch=latch)
 
-        self.tcp_server.publishers[topic] = RosPublisher(topic, message_class, queue_size, latch)
+        self.tcp_server.publishers_table[topic] = new_publisher
+
+        self.tcp_server.loginfo("RegisterPublisher({}, {}) OK".format(topic, message_class))
 
     def ros_service(self, topic, message_name):
         if topic == "":
@@ -193,8 +210,7 @@ class SysCommands:
                 )
             )
             return
-
-        message_class = resolve_message_name(message_name, "srv")
+        message_class = self.resolve_message_name(message_name, "srv")
         if message_class is None:
             self.tcp_server.send_unity_error(
                 "RegisterRosService({}, {}) - Unknown service class '{}'".format(
@@ -203,12 +219,15 @@ class SysCommands:
             )
             return
 
-        rospy.loginfo("RegisterRosService({}, {}) OK".format(topic, message_class))
+        old_node = self.tcp_server.ros_services_table.get(topic)
+        if old_node is not None:
+            self.tcp_server.unregister_node(old_node)
 
-        if topic in self.tcp_server.ros_services:
-            self.tcp_server.ros_services[topic].unregister()
+        new_service = RosService(topic, message_class)
 
-        self.tcp_server.ros_services[topic] = RosService(topic, message_class)
+        self.tcp_server.ros_services_table[topic] = new_service
+
+        self.tcp_server.loginfo("RegisterRosService({}, {}) OK".format(topic, message_class))
 
     def unity_service(self, topic, message_name):
         if topic == "":
@@ -219,7 +238,7 @@ class SysCommands:
             )
             return
 
-        message_class = resolve_message_name(message_name, "srv")
+        message_class = self.resolve_message_name(message_name, "srv")
         if message_class is None:
             self.tcp_server.send_unity_error(
                 "RegisterUnityService({}, {}) - Unknown service class '{}'".format(
@@ -228,12 +247,15 @@ class SysCommands:
             )
             return
 
-        rospy.loginfo("RegisterUnityService({}, {}) OK".format(topic, message_class))
+        old_node = self.tcp_server.unity_services_table.get(topic)
+        if old_node is not None:
+            self.tcp_server.unregister_node(old_node)
 
-        if topic in self.tcp_server.unity_services:
-            self.tcp_server.unity_services[topic].unregister()
+        new_service = UnityService(str(topic), message_class, self.tcp_server)
 
-        self.tcp_server.unity_services[topic] = UnityService(topic, message_class, self.tcp_server)
+        self.tcp_server.unity_services_table[topic] = new_service
+
+        self.tcp_server.loginfo("RegisterUnityService({}, {}) OK".format(topic, message_class))
 
     def response(self, srv_id):  # the next message is a service response
         self.tcp_server.pending_srv_id = srv_id
@@ -246,25 +268,26 @@ class SysCommands:
     def topic_list(self):
         self.tcp_server.unity_tcp_sender.send_topic_list()
 
-
-def resolve_message_name(name, extension="msg"):
-    try:
-        names = name.split("/")
-        module_name = names[0]
-        class_name = names[1]
-        importlib.import_module(module_name + "." + extension)
-        module = sys.modules[module_name]
-        if module is None:
-            rospy.logerr("Failed to resolve module {}".format(module_name))
-        module = getattr(module, extension)
-        if module is None:
-            rospy.logerr("Failed to resolve module {}.{}".format(module_name, extension))
-        module = getattr(module, class_name)
-        if module is None:
-            rospy.logerr(
-                "Failed to resolve module {}.{}.{}".format(module_name, extension, class_name)
-            )
-        return module
-    except (IndexError, KeyError, AttributeError, ImportError) as e:
-        rospy.logerr("Failed to resolve message name: {}".format(e))
-        return None
+    def resolve_message_name(self, name, extension="msg"):
+        try:
+            names = name.split("/")
+            module_name = names[0]
+            class_name = names[1]
+            importlib.import_module(module_name + "." + extension)
+            module = sys.modules[module_name]
+            if module is None:
+                self.tcp_server.logerr("Failed to resolve module {}".format(module_name))
+            module = getattr(module, extension)
+            if module is None:
+                self.tcp_server.logerr(
+                    "Failed to resolve module {}.{}".format(module_name, extension)
+                )
+            module = getattr(module, class_name)
+            if module is None:
+                self.tcp_server.logerr(
+                    "Failed to resolve module {}.{}.{}".format(module_name, extension, class_name)
+                )
+            return module
+        except (IndexError, KeyError, AttributeError, ImportError) as e:
+            self.tcp_server.logerr("Failed to resolve message name: {}".format(e))
+            return None
