@@ -93,11 +93,14 @@ class TcpServer:
 
         while True:
             tcp_server.listen(self.connections)
-            client_sock, client_addr = tcp_server.accept()
-            print('New connection from', client_addr)            
+            #client_sock, client_addr = tcp_server.accept()
+            #print('New connection from', client_addr)            
 
             try:
-                (conn, (ip, port)) = tcp_server.accept()
+		if self.public:
+		   (conn, (ip, port,_,_)) = tcp_server.accept()
+		else:                
+		   (conn, (ip, port)) = tcp_server.accept()
                 ClientThread(conn, self, ip, port).start()
             except socket.timeout as err:
                 self.logerr("ros_tcp_endpoint.TcpServer: socket timeout")
