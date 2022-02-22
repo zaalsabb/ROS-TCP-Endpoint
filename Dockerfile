@@ -1,5 +1,22 @@
-FROM ros:melodic
+FROM ubuntu:20.04
+# install Husarnet client
+RUN apt update -y && \
+    apt install -y curl && \
+    apt install -y gnupg2 && \
+    apt install -y systemd && \
+    curl https://install.husarnet.com/install.sh | bash
 
+RUN apt-get install -y iptables arptables ebtables
+RUN update-alternatives --set ip6tables /usr/sbin/ip6tables-nft
+
+# install webserver service
+RUN apt install -y nginx
+
+# some optional modules
+RUN apt install -y vim
+RUN apt install -y iputils-ping
+
+FROM ros:melodic
 # install build tools
 RUN apt-get update && apt-get install -y \
       python-catkin-tools \
@@ -27,6 +44,13 @@ RUN catkin config \
       --extend /opt/ros/$ROS_DISTRO && \
     catkin build \
       ros_tcp_endpoint
+
+# Find your JOINCODE at https://app.husarnet.com
+ENV JOINCODE=""
+ENV HOSTNAME=my-container-1
+
+# HTTP PORT
+EXPOSE 80
 
 COPY ros_entrypoint.sh /
 RUN chmod +x /ros_entrypoint.sh
