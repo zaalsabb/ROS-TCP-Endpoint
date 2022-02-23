@@ -1,4 +1,4 @@
-FROM ubuntu:20.04
+FROM ros:noetic
 # install Husarnet client
 RUN apt update -y && \
     apt install -y curl && \
@@ -16,10 +16,11 @@ RUN apt install -y nginx
 RUN apt install -y vim
 RUN apt install -y iputils-ping
 
-FROM ros:melodic
 # install build tools
 RUN apt-get update && apt-get install -y \
-      python-catkin-tools \
+      python3-catkin-tools \
+      python-is-python3 \
+      git \
     && rm -rf /var/lib/apt/lists/*
 
 # clone ros package repo
