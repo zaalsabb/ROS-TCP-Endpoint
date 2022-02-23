@@ -10,7 +10,7 @@ def main():
 
     # Start the Server Endpoint
     rospy.init_node(ros_node_name, anonymous=True)
-    public = rospy.get_param("~public",False)
+    public = rospy.get_param("~public",True)
     tcp_port = rospy.get_param("~port",10000)
 
     tcp_server = TcpServer(ros_node_name, public=public, tcp_port=tcp_port)

@@ -80,7 +80,11 @@ class TcpServer:
             try:
                 external_ip = urllib.request.urlopen('https://ident.me').read().decode('utf8')
             except:
-                external_ip = ''
+                try:
+                    import urllib2
+                    external_ip = urllib2.urlopen('https://ident.me').read().decode('utf8')
+                except:
+                    external_ip = ''
             rospy.loginfo("Starting public server on IP= {} on port={}".format(external_ip, self.tcp_port))
             tcp_server = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
         else:
