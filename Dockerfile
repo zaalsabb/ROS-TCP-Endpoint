@@ -29,9 +29,17 @@ RUN apt-get update && apt-get install -y \
 ENV ROS_WS /opt/ros_ws
 RUN mkdir -p $ROS_WS/src
 WORKDIR $ROS_WS
-RUN git -C src clone \
-      -b main \
-      https://github.com/zaalsabb/ROS-TCP-Endpoint.git
+#RUN git -C src clone \
+#      -b main \
+#      https://github.com/zaalsabb/ROS-TCP-Endpoint.git
+
+# copy repo files
+COPY launch $ROS_WS/src/ROS-TCP-Endpoint/launch
+COPY src $ROS_WS/src/ROS-TCP-Endpoint/src
+COPY CMakeLists.txt $ROS_WS/src/ROS-TCP-Endpoint/CMakeLists.txt
+COPY package.xml $ROS_WS/src/ROS-TCP-Endpoint/package.xml
+COPY requirements.txt $ROS_WS/src/ROS-TCP-Endpoint/requirements.txt
+COPY setup.py $ROS_WS/src/ROS-TCP-Endpoint/setup.py
 
 # install ros package dependencies
 RUN apt-get update && \
