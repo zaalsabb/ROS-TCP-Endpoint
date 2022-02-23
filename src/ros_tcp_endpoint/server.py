@@ -19,7 +19,6 @@ import json
 import sys
 import threading
 import importlib
-import urllib
 
 from .tcp_sender import UnityTcpSender
 from .client import ClientThread
@@ -78,15 +77,18 @@ class TcpServer:
         if self.public:
             self.tcp_ip = ''
             try:
+                import urllib.request
                 external_ip = urllib.request.urlopen('https://ident.me').read().decode('utf8')
-            except:
+            except Exception as e:
+                print(e)
                 try:
                     import urllib2
                     external_ip = urllib2.urlopen('https://ident.me').read().decode('utf8')
-                except:
+                except Exception as e:
+                    print(e)
                     external_ip = ''
             rospy.loginfo("Starting public server on IP= {} on port={}".format(external_ip, self.tcp_port))
-            tcp_server = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+            tcp_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         else:
             self.tcp_ip = get_ipv4()
             rospy.loginfo("Starting local server on {}:{}".format(self.tcp_ip, self.tcp_port))
@@ -97,13 +99,12 @@ class TcpServer:
 
         while True:
             tcp_server.listen(self.connections)
-            #client_sock, client_addr = tcp_server.accept()
-            #print('New connection from', client_addr)
             try:
                 if self.public:
                     (conn, (ip, port,_,_)) = tcp_server.accept()
                 else:
                     (conn, (ip, port)) = tcp_server.accept()
+                print('New connection from', ip)
                 ClientThread(conn, self, ip, port).start()
             except socket.timeout as err:
                 self.logerr("ros_tcp_endpoint.TcpServer: socket timeout")
