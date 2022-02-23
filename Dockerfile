@@ -8,6 +8,8 @@ RUN apt update -y && \
 
 RUN apt-get install -y iptables arptables ebtables
 RUN update-alternatives --set ip6tables /usr/sbin/ip6tables-nft
+RUN update-alternatives --set iptables /usr/sbin/iptables-legacy
+RUN update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
 
 # install webserver service
 RUN apt install -y nginx
