@@ -44,7 +44,7 @@ class TcpServer:
         """
 
         self.public = public
-        self.tcp_ip = '0.0.0.0'
+        self.tcp_ip = ''
         self.tcp_port = tcp_port
 
         self.unity_tcp_sender = UnityTcpSender(self)
