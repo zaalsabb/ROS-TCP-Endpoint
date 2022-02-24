@@ -44,6 +44,7 @@ class TcpServer:
         """
 
         self.public = public
+        self.tcp_ip = '0.0.0.0'
         self.tcp_port = tcp_port
 
         self.unity_tcp_sender = UnityTcpSender(self)
@@ -75,7 +76,6 @@ class TcpServer:
             For each new connection a client thread will be created to handle communication.
         """
         if self.public:
-            self.tcp_ip = ''
             try:
                 import urllib.request
                 external_ip = urllib.request.urlopen('https://ident.me').read().decode('utf8')
@@ -87,11 +87,10 @@ class TcpServer:
                 except Exception as e:
                     print(e)
                     external_ip = ''
-            rospy.loginfo("Starting public server on IP= {} on port={}".format(external_ip, self.tcp_port))
-            tcp_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            rospy.loginfo("Starting server on public IP= {}, local IP={}, on port={}".format(external_ip,get_ipv4(),self.tcp_port))
+            tcp_server = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
         else:
-            self.tcp_ip = get_ipv4()
-            rospy.loginfo("Starting local server on {}:{}".format(self.tcp_ip, self.tcp_port))
+            rospy.loginfo("Starting local server on local IP={}, on port={}".format(get_ipv4(), self.tcp_port))
             tcp_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
         tcp_server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
