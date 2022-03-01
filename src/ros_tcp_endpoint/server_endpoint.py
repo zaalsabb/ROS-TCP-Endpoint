@@ -12,8 +12,9 @@ def main():
     rospy.init_node(ros_node_name, anonymous=True)
     public = rospy.get_param("~public",True)
     tcp_port = rospy.get_param("~port",10000)
+    domain_parameters = rospy.get_param("~domain_parameters",None)
 
-    tcp_server = TcpServer(ros_node_name, public=public, tcp_port=tcp_port)
+    tcp_server = TcpServer(ros_node_name, public=public, tcp_port=tcp_port, domain_parameters=domain_parameters)
 
     tcp_server.start()
     rospy.spin()

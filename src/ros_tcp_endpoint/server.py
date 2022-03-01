@@ -19,6 +19,7 @@ import json
 import sys
 import threading
 import importlib
+import urllib2
 
 from .tcp_sender import UnityTcpSender
 from .client import ClientThread
@@ -33,7 +34,7 @@ class TcpServer:
     Initializes ROS node and TCP server.
     """
 
-    def __init__(self, node_name, buffer_size=1024, connections=2, public=False, tcp_port=-1):
+    def __init__(self, node_name, buffer_size=1024, connections=2, public=False, tcp_port=-1, domain_parameters=None):
         """
         Initializes ROS node and class variables.
 
@@ -46,6 +47,9 @@ class TcpServer:
         self.public = public
         self.tcp_ip = ''
         self.tcp_port = tcp_port
+
+        with open(domain_parameters) as f:
+            self.domain_parameters = json.load(f)
 
         self.unity_tcp_sender = UnityTcpSender(self)
 
@@ -76,21 +80,30 @@ class TcpServer:
             For each new connection a client thread will be created to handle communication.
         """
         if self.public:
+            # try:
+            #     ipv4 = urllib2.urlopen('https://v4.ident.me').read().decode('utf8')
+            # except Exception as e:
+            #     print('No IPv4 detected!')
+            #     ipv4 = ''
+            ipv4 = get_ipv4_local()
             try:
-                import urllib.request
-                external_ip = urllib.request.urlopen('https://ident.me').read().decode('utf8')
+                ipv6 = urllib2.urlopen('https://v6.ident.me').read().decode('utf8')
             except Exception as e:
-                print(e)
-                try:
-                    import urllib2
-                    external_ip = urllib2.urlopen('https://ident.me').read().decode('utf8')
-                except Exception as e:
-                    print(e)
-                    external_ip = ''
-            rospy.loginfo("Starting server on public IP= {}, local IP={}, on port={}".format(external_ip,get_ipv4(),self.tcp_port))
+                print('No IPv6 detected!')
+                ipv6 = ''
+
+            try:
+                parameters = [self.domain_parameters['name'],self.domain_parameters['token'],ipv4,ipv6]
+                res=urllib2.urlopen('https://www.duckdns.org/update?domains={}&token={}&ip={}&ipv6={}'.format(*parameters)).read()
+                if res=='KO':
+                    print('Error: could not set up DNS server hostname!\n')
+            except Exception as e:
+                print('Error: could not update DNS server hostname!\n')
+
+            rospy.loginfo("Starting server on domain {} on port={}".format(self.domain_parameters['name'],self.tcp_port))
             tcp_server = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
         else:
-            rospy.loginfo("Starting local server on local IP={}, on port={}".format(get_ipv4(), self.tcp_port))
+            rospy.loginfo("Starting local server on local IP={} on port={}".format(get_ipv4_local(), self.tcp_port))
             tcp_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
         tcp_server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -142,7 +155,7 @@ class TcpServer:
         if old_node is not None:
             old_node.unregister()
 
-def get_ipv4():
+def get_ipv4_local():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         s.connect(('10.255.255.255', 1))
