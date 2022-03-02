@@ -79,32 +79,30 @@ class TcpServer:
             Creates and binds sockets using TCP variables then listens for incoming connections.
             For each new connection a client thread will be created to handle communication.
         """
+
         if self.public:
-            # try:
-            #     ipv4 = urllib2.urlopen('https://v4.ident.me').read().decode('utf8')
-            # except Exception as e:
-            #     print('No IPv4 detected!')
-            #     ipv4 = ''
-            ipv4 = get_ipv4_local()
-            try:
-                ipv6 = urllib2.urlopen('https://v6.ident.me').read().decode('utf8')
-            except Exception as e:
-                print('No IPv6 detected!')
-                ipv6 = ''
-
-            try:
-                parameters = [self.domain_parameters['name'],self.domain_parameters['token'],ipv4,ipv6]
-                res=urllib2.urlopen('https://www.duckdns.org/update?domains={}&token={}&ip={}&ipv6={}'.format(*parameters)).read()
-                if res=='KO':
-                    print('Error: could not set up DNS server hostname!\n')
-            except Exception as e:
-                print('Error: could not update DNS server hostname!\n')
-
-            rospy.loginfo("Starting server on domain {} on port={}".format(self.domain_parameters['name'],self.tcp_port))
-            tcp_server = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+            tcp_server = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)            
         else:
-            rospy.loginfo("Starting local server on local IP={} on port={}".format(get_ipv4_local(), self.tcp_port))
-            tcp_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            tcp_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)            
+
+        ipv4 = get_ipv4_local()
+        try:
+            ipv6 = urllib2.urlopen('https://v6.ident.me').read().decode('utf8')
+        except Exception as e:
+            print('\nNo IPv6 address detected! Connect your device to an IPv6 compatible network! (https://test-ipv6.com/)\n')
+            ipv6 = ''
+
+        try:
+            parameters = [self.domain_parameters['name'],self.domain_parameters['token'],ipv4,ipv6]
+            res=urllib2.urlopen('https://www.duckdns.org/update?domains={}&token={}&clear=true'.format(*parameters)).read()
+            res=urllib2.urlopen('https://www.duckdns.org/update?domains={}&token={}&ip={}&ipv6={}'.format(*parameters)).read()
+            if res=='KO':
+                print('Error: could not set up DNS server hostname!\n')
+        except Exception as e:
+            print('Error: could not update DNS server hostname!\n')
+    
+        rospy.loginfo("Starting server on domain {} on port={}".format(self.domain_parameters['name'],self.tcp_port))
+        tcp_server = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
 
         tcp_server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         tcp_server.bind((self.tcp_ip, self.tcp_port))
@@ -165,6 +163,7 @@ def get_ipv4_local():
     finally:
         s.close()
     return IP
+
 
 class SysCommands:
     def __init__(self, tcp_server):
