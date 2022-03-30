@@ -46,7 +46,7 @@ class TcpServer:
 
         self.public = public
         self.tcp_ip = ''
-        self.tcp_port = tcp_port
+        self.tcp_port = int(tcp_port)
 
         with open(domain_parameters) as f:
             self.domain_parameters = json.load(f)
@@ -86,10 +86,14 @@ class TcpServer:
             tcp_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)            
 
         ipv4 = get_ipv4_local()
-        try:
-            ipv6 = urllib2.urlopen('https://v6.ident.me').read().decode('utf8')
-        except Exception as e:
-            print('\nNo IPv6 address detected! Connect your device to an IPv6 compatible network! (https://test-ipv6.com/)\n')
+
+        if self.public:
+            try:
+                ipv6 = urllib2.urlopen('https://v6.ident.me').read().decode('utf8')
+            except Exception as e:
+                print('\nNo IPv6 address detected! Connect your device to an IPv6 compatible network! (https://test-ipv6.com/)\n')
+                ipv6 = ''
+        else:
             ipv6 = ''
 
         try:
@@ -101,8 +105,12 @@ class TcpServer:
         except Exception as e:
             print('Error: could not update DNS server hostname!\n')
     
-        rospy.loginfo("Starting server on domain {} on port={}".format(self.domain_parameters['name'],self.tcp_port))
-        tcp_server = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+        if self.public:
+            server_type = 'public'
+        else:
+            server_type = 'local'
+
+        print("\nStarting {} server on domain {} on port={}".format(server_type,self.domain_parameters['name'],self.tcp_port))
 
         tcp_server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         tcp_server.bind((self.tcp_ip, self.tcp_port))
@@ -116,8 +124,8 @@ class TcpServer:
                     (conn, (ip, port)) = tcp_server.accept()
                 print('New connection from', ip)
                 ClientThread(conn, self, ip, port).start()
-            except socket.timeout as err:
-                self.logerr("ros_tcp_endpoint.TcpServer: socket timeout")
+            except Exception as err:
+                print("ros_tcp_endpoint.TcpServer: socket timeout")
 
     def send_unity_error(self, error):
         self.unity_tcp_sender.send_unity_error(error)
